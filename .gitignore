@@ -1,0 +1,77 @@
+# ─── Dependencias ────────────────────────────────────────────────────────────
+node_modules/
+**/node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─── Variables de entorno y secretos ────────────────────────────────────────
+# Todos los .env en cualquier nivel. Las plantillas sin secretos sí se suben.
+.env
+.env.*
+.env*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+.envrc
+*.secret
+*.secrets
+secrets/
+credentials/
+credentials.json
+*credentials*.json
+service-account*.json
+firebase-adminsdk*.json
+
+# ─── Claves, certificados y tokens ──────────────────────────────────────────
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+id_rsa*
+id_ed25519*
+*.token
+*.tokens
+token.json
+.npmrc
+.yarnrc.yml
+.gitattributes-local
+gcp-*.json
+supabase-service-role*
+*service_role*
+
+# ─── Builds y artefactos ────────────────────────────────────────────────────
+dist/
+build/
+out/
+coverage/
+.vite/
+*.tsbuildinfo
+*.map
+client/dist/
+server/dist/
+
+# ─── Logs y temporales ──────────────────────────────────────────────────────
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# ─── SO y editores ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.code-workspace
+.history/

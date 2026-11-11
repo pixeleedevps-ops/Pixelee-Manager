@@ -1,0 +1,18 @@
+{
+  "name": "pixele-manager",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PIXELÉE MANAGER - Sistema administrativo local (FASE 1)",
+  "packageManager": "pnpm@11.20.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:client": "pnpm --filter client dev",
+    "dev:server": "pnpm --filter server dev",
+    "build": "pnpm --filter client build",
+    "preview": "pnpm --filter client preview",
+    "start": "pnpm --filter server start",
+    "db:migrate": "pnpm --filter server db:migrate",
+    "db:seed": "pnpm --filter server db:seed",
+    "test": "pnpm --filter server test"
+  }
+}
