@@ -26,7 +26,7 @@ export const OPTION_SOURCES = {
   distribution_item_id: { table: 'profit_distribution_items', label: 'amount', module: 'Gerencia' },
 };
 
-import { query } from '../db.js';
+import { query, TABLE_NAMES, COLUMN_NAMES } from '../db.js';
 
 /** Devuelve {id, label} de todas las fuentes, limitado a 500 por tabla. */
 export async function getAllOptions() {
@@ -34,7 +34,7 @@ export async function getAllOptions() {
   const jobs = Object.entries(OPTION_SOURCES).map(async ([key, src]) => {
     try {
       const rows = await query(
-        `select id, ${src.label}::text as label from public.${src.table} order by ${src.label} asc limit 500`
+        `select id, ${(COLUMN_NAMES[src.table]?.[src.label] || src.label)}::text as label from public.${TABLE_NAMES[src.table] || src.table} order by ${(COLUMN_NAMES[src.table]?.[src.label] || src.label)} asc limit 500`
       );
       out[key] = rows.map((r) => ({ id: r.id, label: r.label || String(r.id).slice(0, 8) }));
     } catch {

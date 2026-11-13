@@ -7,7 +7,7 @@ import { permissionsFor, ROLE_LABELS, clearAuthCache } from '../middleware/auth.
 import { findAuthUserByEmail, createLocalAuthUser } from '../services/authAdmin.js';
 
 /**
- * Garantiza que un usuario de Supabase Auth tenga su perfil en public.profiles.
+ * Garantiza que un usuario de Supabase Auth tenga su perfil en public.perfiles.
  * - PRIMER perfil del sistema => administrador activo.
  * - Siguientes => rol `soporte` e INACTIVO hasta que un administrador lo active.
  *
@@ -15,9 +15,11 @@ import { findAuthUserByEmail, createLocalAuthUser } from '../services/authAdmin.
  * 'colaborador', por lo que SIEMPRE se envía un rol explícito válido.
  */
 export async function ensureProfile(authUser) {
-  const existing = await queryOne('select * from public.profiles where id = $1', [authUser.id]);
+  const existing = await queryOne(`select id, full_name, email, phone, role, is_active,
+      fecha_creacion as created_at, fecha_actualizacion as updated_at
+    from public.perfiles where id = $1`, [authUser.id]);
   if (existing) return existing;
-  const count = await queryOne('select count(*)::int c from public.profiles');
+  const count = await queryOne('select count(*)::int c from public.perfiles');
   const first = count.c === 0;
   const role = first ? 'administrador' : 'soporte';
   const isActive = first;
@@ -25,10 +27,11 @@ export async function ensureProfile(authUser) {
     || authUser.user_metadata?.name
     || (authUser.email || 'Usuario').split('@')[0];
   return queryOne(
-    `insert into public.profiles (id, full_name, email, role, is_active)
+    `insert into public.perfiles (id, full_name, email, role, is_active)
      values ($1, $2, $3, $4, $5)
      on conflict (id) do update set email = excluded.email
-     returning *`,
+     returning id, full_name, email, phone, role, is_active,
+       fecha_creacion as created_at, fecha_actualizacion as updated_at`,
     [authUser.id, name, authUser.email || null, role, isActive]
   );
 }

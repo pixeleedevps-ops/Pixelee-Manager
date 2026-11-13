@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Search, Plus, Pencil, Trash2, Eye, ChevronLeft, ChevronRight,
-  X, Inbox, ExternalLink,
+  X, Inbox, ExternalLink, FolderKanban, Building2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { get, post, put, del } from '../lib/api';
@@ -88,7 +89,9 @@ function RelatedTable({ name, rows, schema, options }) {
               <tr key={r.id || i} className="hover:bg-slate-50">
                 {keys.map((k) => (
                   <td key={k} className="px-3 py-2 text-slate-600">
-                    {renderValue(k, r[k], def?.fields?.[k], options)}
+                    {name === 'projects' && k === 'project_name' && r.id
+                      ? <Link to={`/proyectos/${r.id}`} className="font-medium text-blue-700 hover:underline">{r[k] || 'Proyecto'}</Link>
+                      : renderValue(k, r[k], def?.fields?.[k], options)}
                   </td>
                 ))}
               </tr>
@@ -152,7 +155,7 @@ function FormField({ name, def, value, onChange, options }) {
 /* ─── Página de recurso ───────────────────────────────────────────────────── */
 export default function ResourcePage({
   entity, title, description, compact = false,
-  defaultFilters = {}, onChanged,
+  defaultFilters = {}, onChanged, display = 'table', summaryFields = [],
 }) {
   const { schema, options, reloadOptions, can } = useAuth();
   const def = useMemo(
@@ -341,6 +344,53 @@ export default function ResourcePage({
             ? 'No hay resultados con esos filtros. Prueba a limpiar la búsqueda.'
             : `Todavía no hay ${def.label.toLowerCase()} en la base de datos. Crea el primero con el botón «Nuevo».`}
           action={canCreate ? <Button onClick={openCreate}><Plus size={16} /> Crear registro</Button> : null} />
+      ) : display === 'cards' ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {items.map((row) => {
+              const fields = summaryFields.map((key) => [key, def.fields[key]]).filter(([, field]) => field);
+              const primary = fields[0];
+              const secondary = fields.slice(1, 5);
+              return (
+                <article key={row.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col min-w-0">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-10 h-10 shrink-0 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                      {entity === 'clients' ? <Building2 size={19} /> : <FolderKanban size={19} />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-slate-800 truncate">{primary ? row[primary[0]] || 'Sin nombre' : def.label}</h3>
+                      {primary && <p className="text-xs text-slate-400 mt-0.5">{primary[1].label}</p>}
+                    </div>
+                  </div>
+                  <dl className="mt-4 space-y-2 flex-1">
+                    {secondary.map(([field, fieldDef]) => (
+                      <div key={field} className="flex justify-between gap-3 text-sm">
+                        <dt className="text-slate-400 shrink-0">{fieldDef.label}</dt>
+                        <dd className="text-right text-slate-700 min-w-0">{renderValue(field, row[field], fieldDef, options)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <div className="flex items-center justify-between gap-2 border-t border-slate-100 mt-4 pt-3">
+                    <button onClick={() => openDetail(row.id)} className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:text-blue-900">
+                      <Eye size={15} /> Ver ficha y relaciones
+                    </button>
+                    <div className="flex items-center">
+                      {canManage && <button onClick={() => openEdit(row)} className="p-1.5 text-slate-400 hover:text-slate-800" title="Editar"><Pencil size={15} /></button>}
+                      {canManage && def.deletable && <button onClick={() => setConfirm({ id: row.id, name: row[primary?.[0]] })} className="p-1.5 text-slate-400 hover:text-red-600" title="Eliminar"><Trash2 size={15} /></button>}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+            <span>{total} registro(s) · página {page} de {pages}</span>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={15} /> Anterior</Button>
+              <Button variant="secondary" disabled={page >= pages} onClick={() => setPage(page + 1)}>Siguiente <ChevronRight size={15} /></Button>
+            </div>
+          </div>
+        </>
       ) : (
         <>
           <Table columns={[...columns.map(([, f]) => ({ label: f.label })), { label: 'Acciones', align: 'right' }]}>

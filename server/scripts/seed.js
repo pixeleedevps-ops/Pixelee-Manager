@@ -67,11 +67,11 @@ async function main() {
     process.exit(1);
   }
 
-  const count = await pool.query('select count(*)::int c from public.profiles');
+  const count = await pool.query('select count(*)::int c from public.perfiles');
   const first = count.rows[0].c === 0;
   const role = first ? 'administrador' : 'soporte';
   await pool.query(
-    `insert into public.profiles (id, full_name, email, role, is_active)
+    `insert into public.perfiles (id, full_name, email, role, is_active)
      values ($1,$2,$3,$4,$5)
      on conflict (id) do update set
        full_name = excluded.full_name,

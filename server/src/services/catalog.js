@@ -11,8 +11,8 @@
  *   e:a,b,c  enumeración con los valores REALES del CHECK de la BD
  *
  * Fuente: SUPABASE_SCHEMA_MAP.md (inspección directa de pg_catalog).
- * NO incluye columnas generadas (`subtotal`), ni `id`, `created_at`,
- * `updated_at`, ni columnas autogestionadas por triggers.
+ * Los nombres lógicos del frontend se traducen a nombres físicos mediante
+ * COLUMN_NAMES en db.js. Perfiles conserva sus cinco columnas inglesas.
  */
 import { ALL_PERMISSIONS } from '../middleware/auth.js';
 

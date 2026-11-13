@@ -11,6 +11,7 @@ import Marketing from './pages/Marketing';
 import Operations from './pages/Operations';
 import Management from './pages/Management';
 import Settings from './pages/Settings';
+import ProjectDetail from './pages/ProjectDetail';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/clientes" element={<Guard perm="clients.view"><Clients /></Guard>} />
         <Route path="/contabilidad" element={<Guard perm="accounting.view"><Accounting /></Guard>} />
         <Route path="/desarrollo" element={<Guard perm="projects.view"><Development /></Guard>} />
+        <Route path="/proyectos/:id" element={<Guard perm="projects.view"><ProjectDetail /></Guard>} />
         <Route path="/marketing" element={<Guard perm="marketing.view"><Marketing /></Guard>} />
         <Route path="/operaciones" element={<Guard perm="ops.view"><Operations /></Guard>} />
         <Route path="/gerencia" element={<Guard perm="management.view"><Management /></Guard>} />

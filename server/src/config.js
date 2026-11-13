@@ -1,4 +1,8 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'node:url';
+
+// Cargar siempre el .env junto al backend, aunque Node se inicie desde otro cwd.
+dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) });
 
 function int(v, d) {
   const n = parseInt(v ?? '', 10);
