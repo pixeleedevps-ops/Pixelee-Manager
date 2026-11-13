@@ -1,4 +1,4 @@
-import { query, queryOne, withTransaction, mapDbError } from '../db.js';
+import { query, queryOne, withTransaction, mapDbError, TABLE_NAMES, COLUMN_NAMES } from '../db.js';
 import { CATALOG } from './catalog.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -19,6 +19,24 @@ function getDef(entity) {
     throw e;
   }
   return def;
+}
+
+function dbColumn(entity, column) { return COLUMN_NAMES[entity]?.[column] || column; }
+function dbTable(entity, def = getDef(entity)) { return TABLE_NAMES[entity] || def.table; }
+function selectColumns(entity) {
+  const def = getDef(entity);
+  const columns = [...new Set(['id', ...Object.keys(def.fields || {}), ...Object.keys(def.auto || {}), ...Object.keys(COLUMN_NAMES[entity] || {})])];
+  return columns
+    .map((column) => `${dbColumn(entity, column)}${dbColumn(entity, column) !== column ? ` as ${column}` : ''}`).join(', ');
+}
+
+function translateOrder(entity, order) {
+  return order.split(',').map((piece) => {
+    const match = piece.trim().match(/^(?:(\w+)\.)?(\w+)(.*)$/);
+    if (!match) return piece;
+    const [, prefix = '', column, suffix] = match;
+    return `${prefix}${dbColumn(entity, column)}${suffix}`;
+  }).join(', ');
 }
 
 /** Normaliza y valida el body contra la whitelist de campos reales. */
@@ -97,6 +115,7 @@ const normSql = (expr) => `translate(lower(${expr}), '${ACC_FROM}', '${ACC_TO}')
 /** Construye WHERE parametrizado a partir de búsqueda + filtros reales. */
 export function buildQuery(entity, opts = {}) {
   const def = getDef(entity);
+  const dbCol = (column) => dbColumn(entity, column);
   const { q = '', page = 1, pageSize = 25, filters = {}, all = false } = opts;
   const whereParams = [];
   const where = [];
@@ -104,7 +123,7 @@ export function buildQuery(entity, opts = {}) {
   if (q && def.search?.length) {
     const ors = def.search.map((col) => {
       whereParams.push(`%${q}%`);
-      return `${normSql(col)} like ${normSql(`$${whereParams.length}`)}`;
+      return `${normSql(dbCol(col))} like ${normSql(`$${whereParams.length}`)}`;
     });
     where.push(`(${ors.join(' or ')})`);
   }
@@ -116,7 +135,7 @@ export function buildQuery(entity, opts = {}) {
     if (raw === 'true') value = true;
     else if (raw === 'false') value = false;
     whereParams.push(value);
-    where.push(`${col} = $${whereParams.length}`);
+    where.push(`${dbCol(col)} = $${whereParams.length}`);
   }
 
   const whereSql = where.length ? `where ${where.join(' and ')}` : '';
@@ -124,11 +143,13 @@ export function buildQuery(entity, opts = {}) {
   const offset = all ? null : (Math.max(Number(page) || 1, 1) - 1) * limit;
 
   const listParams = whereParams.slice();
-  const listSql = `select * from public.${def.table} ${whereSql} order by ${def.order}`
+  const dbOrder = translateOrder(entity, def.order);
+  const dbWhere = whereSql;
+  const listSql = `select ${selectColumns(entity)} from public.${dbTable(entity, def)} ${dbWhere} order by ${dbOrder}`
     + (limit
       ? ` limit $${listParams.push(limit)} offset $${listParams.push(offset)}`
       : '');
-  const countSql = `select count(*)::int as total from public.${def.table} ${whereSql}`;
+  const countSql = `select count(*)::int as total from public.${dbTable(entity, def)} ${dbWhere}`;
 
   return {
     listSql, countSql, params: listParams, countParams: whereParams,
@@ -150,7 +171,7 @@ export async function get(entity, id) {
   const def = getDef(entity);
   if (!UUID_RE.test(String(id))) throw bad('Identificador no válido.');
   try {
-    return await queryOne(`select * from public.${def.table} where id = $1`, [id]);
+  return await queryOne(`select ${selectColumns(entity)} from public.${dbTable(entity, def)} where id = $1`, [id]);
   } catch (e) { throw mapDbError(e); }
 }
 
@@ -182,10 +203,12 @@ export async function create(entity, body, user) {
     throw e;
   }
   const data = normalize(entity, body);
+  if (entity === 'payments' && data.status === 'confirmado') await assertPaymentWithinProjectTotal(data.project_id, data.amount);
   const { cols, values } = columnsForInsert(def, data, user);
   if (!cols.length) throw bad('No hay datos para guardar.');
   const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
-  const sql = `insert into public.${def.table} (${cols.join(', ')}) values (${placeholders}) returning *`;
+  const dbCols = cols.map((c) => dbColumn(entity, c));
+  const sql = `insert into public.${dbTable(entity, def)} (${dbCols.join(', ')}) values (${placeholders}) returning ${selectColumns(entity)}`;
   try {
     return await queryOne(sql, values);
   } catch (e) { throw mapDbError(e); }
@@ -200,11 +223,22 @@ export async function update(entity, id, body, user) {
   }
   if (!UUID_RE.test(String(id))) throw bad('Identificador no válido.');
   const data = normalize(entity, body, { partial: true });
+  if (entity === 'payments' && ('amount' in data || 'project_id' in data || 'status' in data)) {
+    const existing = await get(entity, id);
+    if (!existing) {
+      const e = new Error('Registro no encontrado.');
+      e.status = 404;
+      throw e;
+    }
+    if ((data.status ?? existing.status) === 'confirmado') {
+      await assertPaymentWithinProjectTotal(data.project_id || existing.project_id, data.amount ?? existing.amount, id);
+    }
+  }
   const cols = Object.keys(data);
   if (!cols.length) throw bad('No hay cambios para guardar.');
   const values = cols.map((c) => data[c]);
-  const set = cols.map((c, i) => `${c} = $${i + 1}`).join(', ');
-  const sql = `update public.${def.table} set ${set} where id = $${cols.length + 1} returning *`;
+  const set = cols.map((c, i) => `${dbColumn(entity, c)} = $${i + 1}`).join(', ');
+  const sql = `update public.${dbTable(entity, def)} set ${set} where id = $${cols.length + 1} returning ${selectColumns(entity)}`;
   try {
     const row = await queryOne(sql, [...values, id]);
     if (!row) {
@@ -216,6 +250,30 @@ export async function update(entity, id, body, user) {
   } catch (e) { throw mapDbError(e); }
 }
 
+async function assertPaymentWithinProjectTotal(projectId, amount, excludePaymentId = null) {
+  const project = await queryOne(
+    `select p.valor_total as project_total,
+       coalesce((select sum(coalesce(ct.valor_contrato, 0)) from public.contratos ct
+         where ct.proyecto_id = p.id and ct.estado <> 'cancelado'), 0) as contract_total
+     from public.proyectos p where p.id = $1`,
+    [projectId]
+  );
+  if (!project) throw bad('Selecciona un proyecto válido para registrar el pago.');
+  const total = Number(project.contract_total) || Number(project.project_total) || 0;
+  const prior = await queryOne(
+    `select coalesce(sum(valor), 0) as paid from public.pagos
+     where proyecto_id = $1 and estado = 'confirmado' and ($2::uuid is null or id <> $2)`,
+    [projectId, excludePaymentId]
+  );
+  const paid = Number(prior?.paid) || 0;
+  const next = Number(amount) || 0;
+  if (next + paid > total + 0.005) {
+    const e = new Error(`El pago excede el saldo disponible del proyecto. Total: ${total}; confirmado previamente: ${paid}; máximo permitido: ${Math.max(total - paid, 0)}.`);
+    e.status = 400;
+    throw e;
+  }
+}
+
 export async function remove(entity, id) {
   const def = getDef(entity);
   if (def.readonly || def.deletable === false || !def.manage) {
@@ -225,7 +283,7 @@ export async function remove(entity, id) {
   }
   if (!UUID_RE.test(String(id))) throw bad('Identificador no válido.');
   try {
-    const row = await queryOne(`delete from public.${def.table} where id = $1 returning id`, [id]);
+    const row = await queryOne(`delete from public.${dbTable(entity, def)} where id = $1 returning id`, [id]);
     if (!row) {
       const e = new Error('Registro no encontrado.');
       e.status = 404;
@@ -255,7 +313,6 @@ export const RELATIONS = {
   ],
   projects: [
     { key: 'contracts', table: 'contracts', fk: 'project_id' },
-    { key: 'quotes', table: 'quotes', fk: 'project_id' },
     { key: 'invoices', table: 'invoices', fk: 'project_id' },
     { key: 'payments', table: 'payments', fk: 'project_id' },
     { key: 'expenses', table: 'expenses', fk: 'project_id' },
@@ -294,15 +351,19 @@ export async function detail(entity, id) {
   const related = {};
   await Promise.all(rels.map(async (r) => {
     try {
+      const relatedDef = getDef(r.table);
+      const columns = selectColumns(r.table);
+      const fk = dbColumn(r.table, r.fk);
+      const created = dbColumn(r.table, 'created_at');
       related[r.key] = await query(
-        `select * from public.${r.table} where ${r.fk} = $1 order by created_at desc limit 100`,
+        `select ${columns} from public.${dbTable(r.table, relatedDef)} where ${fk} = $1 order by ${created} desc limit 100`,
         [id]
       );
     } catch {
       related[r.key] = [];
     }
   }));
-  return { item: row, related, relations: rels.map((r) => r.key) };
+  return { item: row, related, relations: rels.filter((r) => CATALOG[r.table]).map((r) => r.key) };
 }
 
 export { withTransaction };

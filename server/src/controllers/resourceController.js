@@ -1,7 +1,7 @@
 import { CATALOG, ENTITIES, publicSchema, ALL_PERMISSIONS } from '../services/catalog.js';
 import * as crud from '../services/crud.js';
 import { getAllOptions } from '../services/options.js';
-import { ROLE_LABELS } from '../middleware/auth.js';
+import { ROLE_LABELS, hasPermission } from '../middleware/auth.js';
 
 function deny(res, perm) {
   return res.status(403).json({ error: `No tienes permisos para esta acción (${perm || 'lectura'}).` });
@@ -33,7 +33,7 @@ export async function getEntitySchema(req, res) {
   const schema = publicSchema(req.params.entity);
   if (!schema) return res.status(404).json({ error: 'Entidad no encontrada.' });
   const def = entityOf(req);
-  if (def?.view && !req.perms.includes(def.view)) return deny(res, def.view);
+  if (def?.view && !hasPermission(req.perms, def.view)) return deny(res, def.view);
   return res.json(schema);
 }
 
@@ -41,7 +41,7 @@ export async function getEntitySchema(req, res) {
 export async function list(req, res) {
   const def = entityOf(req);
   if (!def) return res.status(404).json({ error: 'Entidad no encontrada.' });
-  if (def.view && !req.perms.includes(def.view)) return deny(res, def.view);
+  if (def.view && !hasPermission(req.perms, def.view)) return deny(res, def.view);
   const data = await crud.list(req.params.entity, {
     q: req.query.q || '',
     page: req.query.page || 1,
@@ -56,7 +56,7 @@ export async function list(req, res) {
 export async function detail(req, res) {
   const def = entityOf(req);
   if (!def) return res.status(404).json({ error: 'Entidad no encontrada.' });
-  if (def.view && !req.perms.includes(def.view)) return deny(res, def.view);
+  if (def.view && !hasPermission(req.perms, def.view)) return deny(res, def.view);
   return res.json(await crud.detail(req.params.entity, req.params.id));
 }
 
@@ -64,7 +64,7 @@ export async function detail(req, res) {
 export async function get(req, res) {
   const def = entityOf(req);
   if (!def) return res.status(404).json({ error: 'Entidad no encontrada.' });
-  if (def.view && !req.perms.includes(def.view)) return deny(res, def.view);
+  if (def.view && !hasPermission(req.perms, def.view)) return deny(res, def.view);
   const row = await crud.get(req.params.entity, req.params.id);
   if (!row) return res.status(404).json({ error: 'Registro no encontrado.' });
   return res.json({ item: row });
@@ -74,7 +74,7 @@ export async function get(req, res) {
 export async function create(req, res) {
   const def = entityOf(req);
   if (!def) return res.status(404).json({ error: 'Entidad no encontrada.' });
-  if (!def.manage || !req.perms.includes(def.manage)) return deny(res, def.manage);
+  if (!def.manage || !hasPermission(req.perms, def.manage)) return deny(res, def.manage);
   const row = await crud.create(req.params.entity, req.body, req.user);
   return res.status(201).json({ item: row });
 }
@@ -83,7 +83,7 @@ export async function create(req, res) {
 export async function update(req, res) {
   const def = entityOf(req);
   if (!def) return res.status(404).json({ error: 'Entidad no encontrada.' });
-  if (!def.manage || !req.perms.includes(def.manage)) return deny(res, def.manage);
+  if (!def.manage || !hasPermission(req.perms, def.manage)) return deny(res, def.manage);
   const row = await crud.update(req.params.entity, req.params.id, req.body, req.user);
   return res.json({ item: row });
 }
@@ -92,6 +92,6 @@ export async function update(req, res) {
 export async function remove(req, res) {
   const def = entityOf(req);
   if (!def) return res.status(404).json({ error: 'Entidad no encontrada.' });
-  if (!def.manage || !req.perms.includes(def.manage)) return deny(res, def.manage);
+  if (!def.manage || !hasPermission(req.perms, def.manage)) return deny(res, def.manage);
   return res.json(await crud.remove(req.params.entity, req.params.id));
 }

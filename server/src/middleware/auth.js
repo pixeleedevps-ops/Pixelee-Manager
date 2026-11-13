@@ -3,7 +3,7 @@ import { getAuthUser } from '../services/supabaseAuth.js';
 import { config } from '../config.js';
 
 /**
- * Roles que YA EXISTEN en public.profiles (CHECK constraint):
+ * Roles que YA EXISTEN en public.perfiles (CHECK constraint):
  *   administrador, direccion, comercial, desarrollo, finanzas, soporte
  * No se crean roles nuevos. Ver SUPABASE_SCHEMA_MAP.md §1.2 y §7.
  *
@@ -12,6 +12,8 @@ import { config } from '../config.js';
  */
 export const PERMISSIONS = {
   administrador: ['*'],
+  gerencia: ['*'],
+  empleado: ['dashboard.view', 'clients.view', 'projects.view', 'work.view', 'work.manage'],
   direccion: [
     'dashboard.view', 'clients.view', 'clients.manage',
     'projects.view', 'projects.manage',
@@ -58,6 +60,10 @@ export const ROLES = Object.keys(PERMISSIONS);
 export function can(role, perm) {
   const list = PERMISSIONS[role] || [];
   return list.includes('*') || list.includes(perm);
+}
+
+export function hasPermission(perms, required) {
+  return Array.isArray(perms) && (perms.includes('*') || perms.includes(required));
 }
 
 export function permissionsFor(role) {
@@ -125,12 +131,12 @@ export async function requireAuth(req, _res, next) {
     }
 
     const profile = await queryOne(
-      'select id, full_name, email, phone, role, is_active from public.profiles where id = $1',
+      'select id, full_name, email, phone, role, is_active, fecha_creacion as created_at, fecha_actualizacion as updated_at from public.perfiles where id = $1',
       [authUser.id]
     );
     if (!profile) {
       const e = new Error(
-        'Tu usuario de Supabase Auth no tiene perfil en public.profiles. Ejecuta pnpm db:seed o pide a un administrador que lo cree.'
+        'Tu usuario de Supabase Auth no tiene perfil en public.perfiles. Ejecuta pnpm db:seed o pide a un administrador que lo cree.'
       );
       e.status = 403;
       throw e;
