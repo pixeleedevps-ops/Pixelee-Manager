@@ -1,3 +1,6 @@
+SUPABASE_SCHEMA_MAP.md*
+
+
 # ─── Dependencias ────────────────────────────────────────────────────────────
 node_modules/
 **/node_modules/
@@ -6,6 +9,7 @@ node_modules/
 npm-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
 
 # ─── Variables de entorno y secretos ────────────────────────────────────────
 # Todos los .env en cualquier nivel. Las plantillas sin secretos sí se suben.
