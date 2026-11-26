@@ -5,6 +5,7 @@ import {
 } from '../services/supabaseAuth.js';
 import { permissionsFor, ROLE_LABELS, clearAuthCache } from '../middleware/auth.js';
 import { findAuthUserByEmail, createLocalAuthUser } from '../services/authAdmin.js';
+import { clearLoginFailures, recordLoginFailure } from '../middleware/loginRateLimit.js';
 
 /**
  * Garantiza que un usuario de Supabase Auth tenga su perfil en public.perfiles.
@@ -54,7 +55,17 @@ export async function login(req, res) {
   if (!email || !password) {
     return res.status(400).json({ error: 'Correo y contraseña son obligatorios.' });
   }
-  const session = await signInWithPassword(String(email).trim(), String(password));
+  let session;
+  try {
+    session = await signInWithPassword(String(email).trim(), String(password));
+  } catch (error) {
+    if (error.status === 401) {
+      recordLoginFailure(req.loginAttemptKey);
+      return res.status(401).json({ error: 'Correo o contraseña incorrectos.' });
+    }
+    throw error;
+  }
+  clearLoginFailures(req.loginAttemptKey);
   const authUser = session.user || await getAuthUser(session.access_token);
   if (!authUser) return res.status(401).json({ error: 'No se pudo obtener el usuario de Supabase Auth.' });
 

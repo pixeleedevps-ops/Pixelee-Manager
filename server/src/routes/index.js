@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
+import { checkLoginAttempts } from '../middleware/loginRateLimit.js';
 import * as auth from '../controllers/authController.js';
 import * as res from '../controllers/resourceController.js';
 import * as an from '../controllers/analyticsController.js';
@@ -14,7 +15,7 @@ export function buildRoutes() {
 
   // ── Público (sin sesión) ──────────────────────────────────────────────────
   const authPublic = Router();
-  authPublic.post('/login', wrap(auth.login));
+  authPublic.post('/login', checkLoginAttempts, wrap(auth.login));
   authPublic.post('/signup', wrap(auth.signup));
   authPublic.post('/refresh', wrap(auth.refresh));
   api.use('/auth', authPublic);
