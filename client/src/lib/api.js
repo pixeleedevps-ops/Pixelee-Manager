@@ -1,5 +1,8 @@
 const TOKEN_KEY = 'pm_token';
 const REFRESH_KEY = 'pm_refresh';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
+const apiUrl = (path) => `${API_BASE_URL}/api${path}`;
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
@@ -25,7 +28,7 @@ async function tryRefresh() {
   const rt = getRefreshToken();
   if (!rt) return false;
   try {
-    const res = await fetch('/api/auth/refresh', {
+    const res = await fetch(apiUrl('/auth/refresh'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: rt }),
@@ -41,7 +44,7 @@ async function tryRefresh() {
 
 /** Petición JSON centralizada: token, refresh automático y manejo de errores. */
 export async function api(path, { method = 'GET', body, params, retry = true, signal } = {}) {
-  let url = `/api${path}`;
+  let url = apiUrl(path);
   if (params) {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) {
