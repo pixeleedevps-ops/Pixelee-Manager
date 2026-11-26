@@ -5,18 +5,17 @@ export default function Operations() {
   return (
     <ModulePage
       title="Operaciones"
-      description="Dominios, hosting, sitios web, renovaciones, mantenimiento, tickets, incidencias y satisfacción"
+      description="Infraestructura de clientes y soporte operativo, cada dato administrado desde una sola sección."
       overview={<OperationsOverview />}
       tabs={[
-        { id: 'domains', label: 'Dominios', entity: 'domains' },
-        { id: 'hosting', label: 'Hosting', entity: 'hosting_accounts' },
-        { id: 'websites', label: 'Sitios web', entity: 'websites' },
-        { id: 'renewals', label: 'Renovaciones', entity: 'renewals' },
-        { id: 'plans', label: 'Mantenimiento', entity: 'maintenance_plans' },
-        { id: 'tickets', label: 'Tickets', entity: 'tickets' },
-        { id: 'incidents', label: 'Incidencias', entity: 'incidents' },
-        { id: 'surveys', label: 'Encuestas', entity: 'surveys' },
-        { id: 'documents', label: 'Documentos', entity: 'documents' },
+        { id: 'domains', label: 'Dominios', group: 'Infraestructura', entity: 'domains' },
+        { id: 'hosting', label: 'Hosting', group: 'Infraestructura', entity: 'hosting_accounts' },
+        { id: 'websites', label: 'Sitios web', group: 'Infraestructura', entity: 'websites' },
+        { id: 'renewals', label: 'Renovaciones', group: 'Infraestructura', entity: 'renewals' },
+        { id: 'plans', label: 'Mantenimiento', group: 'Infraestructura', entity: 'maintenance_plans' },
+        { id: 'tickets', label: 'Tickets', group: 'Soporte', entity: 'tickets' },
+        { id: 'incidents', label: 'Incidencias', group: 'Soporte', entity: 'incidents' },
+        { id: 'surveys', label: 'Encuestas', group: 'Soporte', entity: 'surveys' },
       ]}
     />
   );

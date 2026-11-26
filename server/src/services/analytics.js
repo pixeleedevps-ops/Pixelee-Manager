@@ -43,7 +43,7 @@ function contractedValue(contracts, projects) {
 }
 
 /** Indicadores + series + actividad para el Dashboard. */
-export async function getDashboard() {
+export async function getDashboardSummary() {
   const counts = await queryOne(`
     select
       (select count(*)::int from public.clientes) as clients,
@@ -59,68 +59,100 @@ export async function getDashboard() {
       (select coalesce(sum(valor),0) from public.gastos) as expenses,
       (select coalesce(sum(monto),0) from public.gastos_adicionales) as extra_expenses,
       (select coalesce(sum(valor),0) from public.costos_proyecto) as project_costs,
-      (select coalesce(sum(valor),0) from public.bonificaciones where estado='aplicada') as bonuses`);
-
-  const projects = await query(`select id, valor_total as total_amount, nombre_proyecto as project_name, cliente_id as client_id, estado as status from public.proyectos`);
-  const contracts = await query(`select proyecto_id as project_id, valor_contrato as amount from public.contratos where estado <> 'cancelado'`);
-  const contracted = contractedValue(contracts, projects);
-  const totals = computeTotals({
-    contracted,
-    payments: await query(`select valor as amount, estado as status, tipo_pago as payment_type from public.pagos`),
-    invoices: await query(`select valor_total as total_amount, estado as status from public.facturas`),
-    expenses: await query(`select valor as amount from public.gastos`),
-    extraExpenses: await query(`select monto as amount from public.gastos_adicionales`),
-    projectCosts: await query(`select valor as amount from public.costos_proyecto`),
-    bonuses: await query(`select valor as amount, estado as status from public.bonificaciones`),
-  });
+      (select coalesce(sum(valor),0) from public.bonificaciones where estado='aplicada') as bonuses,
+      (select coalesce(sum(valor),0) from public.pagos where estado='confirmado') as confirmed_payments,
+      (select coalesce(sum(valor),0) from public.pagos where estado='reembolsado' or tipo_pago='reembolso') as refunds,
+      (select coalesce(sum(valor_contrato),0) from public.contratos where estado <> 'cancelado')
+        + (select coalesce(sum(p.valor_total),0) from public.proyectos p where not exists
+          (select 1 from public.contratos c where c.proyecto_id=p.id and c.estado <> 'cancelado')) as contracted`);
+  const collected = round2(num(counts.confirmed_payments) - num(counts.refunds));
+  const totalExpenses = round2(num(counts.expenses) + num(counts.extra_expenses) + num(counts.project_costs));
+  const profit = round2(collected - totalExpenses - num(counts.bonuses));
+  const totals = {
+    contracted: num(counts.contracted), invoiced: num(counts.invoiced), collected,
+    refunds: num(counts.refunds), balance: round2(num(counts.contracted) - collected),
+    normalExpenses: num(counts.expenses), extraExpenses: num(counts.extra_expenses),
+    projectCosts: num(counts.project_costs), totalExpenses, bonuses: num(counts.bonuses),
+    profit, margin: margin(collected, profit),
+  };
   const indicators = dashboardIndicators({ clients: counts.clients, activeProjects: counts.active_projects,
     finishedProjects: counts.finished_projects, quotes: counts.quotes, invoices: counts.invoices,
     leads: counts.leads, pendingInvoices: counts.pending_invoices, totals });
-  indicators.contracted = contracted;
+  indicators.contracted = num(counts.contracted);
   indicators.openTickets = counts.open_tickets;
 
-  const incomeSeries = await query(`select to_char(date_trunc('month', fecha_pago), 'YYYY-MM') as month,
+  const alerts = [];
+  if (totals.balance > 0) alerts.push(`Cuentas por cobrar pendientes: ${totals.balance} COP.`);
+  if (counts.pending_invoices > 0) alerts.push(`${counts.pending_invoices} factura(s) pendiente(s) o vencida(s).`);
+  if (counts.open_tickets > 0) alerts.push(`${counts.open_tickets} ticket(s) de soporte abierto(s).`);
+  return { indicators, alerts };
+}
+
+export async function getDashboardDetails() {
+  const [incomeSeries, expenseSeries, recentActivity, recentMovements, upcomingDeliveries, upcomingProjectDates] = await Promise.all([
+    query(`select to_char(date_trunc('month', fecha_pago), 'YYYY-MM') as month,
       coalesce(sum(valor),0) as value from public.pagos where estado='confirmado'
-      and fecha_pago >= date_trunc('month', current_date) - interval '5 months' group by 1 order by 1`);
-  const expenseSeries = await query(`select to_char(date_trunc('month', fecha_gasto), 'YYYY-MM') as month,
+      and fecha_pago >= date_trunc('month', current_date) - interval '5 months' group by 1 order by 1`),
+    query(`select to_char(date_trunc('month', fecha_gasto), 'YYYY-MM') as month,
       coalesce(sum(valor),0) as value from public.gastos
-      where fecha_gasto >= date_trunc('month', current_date) - interval '5 months' group by 1 order by 1`);
+      where fecha_gasto >= date_trunc('month', current_date) - interval '5 months' group by 1 order by 1`),
+    query(`select id, nombre_tabla as table_name, accion as action, fecha_creacion as created_at, registro_id as record_id
+      from public.registros_actividad order by fecha_creacion desc limit 8`),
+    query(`select pa.id, pa.valor as amount, pa.fecha_pago as date, pa.estado as status,
+      c.nombre_empresa as client_name, pr.nombre_proyecto as project_name from public.pagos pa
+      left join public.clientes c on c.id=pa.cliente_id left join public.proyectos pr on pr.id=pa.proyecto_id
+      order by pa.fecha_pago desc, pa.fecha_creacion desc limit 8`),
+    query(`select e.id, e.nombre_entrega as name, e.fecha_entrega as date, e.estado as status,
+      c.nombre_empresa as client_name, p.nombre_proyecto as project_name from public.entregas e
+      join public.proyectos p on p.id=e.proyecto_id left join public.clientes c on c.id=p.cliente_id
+      where e.fecha_entrega >= current_date and e.estado <> 'aprobada' order by e.fecha_entrega asc limit 8`),
+    query(`select p.id, p.nombre_proyecto as name, p.fecha_entrega_estimada as date, p.estado as status,
+      c.nombre_empresa as client_name from public.proyectos p left join public.clientes c on c.id=p.cliente_id
+      where p.fecha_entrega_estimada >= current_date and p.estado not in ('finalizado','cancelado')
+      order by p.fecha_entrega_estimada asc limit 8`),
+  ]);
   const months = [...new Set([...incomeSeries, ...expenseSeries].map((r) => r.month))].sort();
   const monthly = months.map((month) => ({ month,
     income: round2(incomeSeries.find((r) => r.month === month)?.value || 0),
     expenses: round2(expenseSeries.find((r) => r.month === month)?.value || 0),
   }));
-  const recentActivity = await query(`select id, nombre_tabla as table_name, accion as action,
-      fecha_creacion as created_at, registro_id as record_id from public.registros_actividad
-      order by fecha_creacion desc limit 8`);
-  const recentMovements = await query(`select pa.id, pa.valor as amount, pa.fecha_pago as date, pa.estado as status,
-      c.nombre_empresa as client_name, pr.nombre_proyecto as project_name from public.pagos pa
-      left join public.clientes c on c.id=pa.cliente_id left join public.proyectos pr on pr.id=pa.proyecto_id
-      order by pa.fecha_pago desc, pa.fecha_creacion desc limit 8`);
-  const upcomingDeliveries = await query(`select e.id, e.nombre_entrega as name, e.fecha_entrega as date,
-      e.estado as status, c.nombre_empresa as client_name, p.nombre_proyecto as project_name
-      from public.entregas e join public.proyectos p on p.id=e.proyecto_id
-      left join public.clientes c on c.id=p.cliente_id
-      where e.fecha_entrega >= current_date and e.estado <> 'aprobada' order by e.fecha_entrega asc limit 8`);
-  const upcomingProjectDates = await query(`select p.id, p.nombre_proyecto as name,
-      p.fecha_entrega_estimada as date, p.estado as status, c.nombre_empresa as client_name
-      from public.proyectos p left join public.clientes c on c.id=p.cliente_id
-      where p.fecha_entrega_estimada >= current_date and p.estado not in ('finalizado','cancelado')
-      order by p.fecha_entrega_estimada asc limit 8`);
-  const alerts = [];
-  if (totals.balance > 0) alerts.push(`Cuentas por cobrar pendientes: ${totals.balance} COP.`);
-  if (counts.pending_invoices > 0) alerts.push(`${counts.pending_invoices} factura(s) pendiente(s) o vencida(s).`);
-  if (counts.open_tickets > 0) alerts.push(`${counts.open_tickets} ticket(s) de soporte abierto(s).`);
-  return { indicators, monthly, recentActivity, recentMovements, upcomingDeliveries, upcomingProjectDates, alerts };
+  return { monthly, recentActivity, recentMovements, upcomingDeliveries, upcomingProjectDates };
+}
+
+export async function getDashboard() {
+  const [summary, details] = await Promise.all([getDashboardSummary(), getDashboardDetails()]);
+  return { ...summary, ...details };
 }
 
 /** Resumen contable + cuentas por cobrar por cliente y por proyecto. */
 export async function getAccountingOverview(from, to) {
-  const rows = await financialRows(from, to);
-  const projects = await query(`select id, nombre_proyecto as project_name, cliente_id as client_id,
-    valor_total as total_amount, estado as status from public.proyectos`);
-  const contracted = contractedValue(rows.contracts, projects);
-  const totals = computeTotals({ contracted, ...rows });
+  const p = RANGE(from, to, 'fecha_pago'); const e = RANGE(from, to, 'fecha_gasto');
+  const ee = RANGE(from, to, 'fecha_gasto'); const pc = RANGE(from, to, 'fecha_costo');
+  const b = RANGE(from, to, 'fecha_asignacion'); const i = RANGE(from, to, 'fecha_emision');
+  const [payments, expenses, extraExpenses, projectCosts, bonuses, invoices, contracts, contractedRow] = await Promise.all([
+    queryOne(`select count(*)::int as count, coalesce(sum(valor) filter (where estado='confirmado'),0) as confirmed,
+      coalesce(sum(valor) filter (where estado='reembolsado' or tipo_pago='reembolso'),0) as refunds from public.pagos where true ${p.sql}`, p.params),
+    queryOne(`select count(*)::int as count, coalesce(sum(valor),0) as amount from public.gastos where true ${e.sql}`, e.params),
+    queryOne(`select count(*)::int as count, coalesce(sum(monto),0) as amount from public.gastos_adicionales where true ${ee.sql}`, ee.params),
+    queryOne(`select count(*)::int as count, coalesce(sum(valor),0) as amount from public.costos_proyecto where true ${pc.sql}`, pc.params),
+    queryOne(`select count(*)::int as count, coalesce(sum(valor) filter (where estado='aplicada'),0) as amount from public.bonificaciones where true ${b.sql}`, b.params),
+    queryOne(`select count(*)::int as count, coalesce(sum(valor_total) filter (where estado<>'anulada'),0) as amount from public.facturas where true ${i.sql}`, i.params),
+    queryOne(`select count(*)::int as count from public.contratos where estado<>'cancelado'`),
+    queryOne(`select
+      (select coalesce(sum(valor_contrato),0) from public.contratos where estado<>'cancelado') +
+      (select coalesce(sum(p.valor_total),0) from public.proyectos p where not exists
+        (select 1 from public.contratos c where c.proyecto_id=p.id and c.estado<>'cancelado')) as amount`),
+  ]);
+  const collected = round2(num(payments.confirmed) - num(payments.refunds));
+  const totalExpenses = round2(num(expenses.amount) + num(extraExpenses.amount) + num(projectCosts.amount));
+  const profit = round2(collected - totalExpenses - num(bonuses.amount));
+  const totals = {
+    contracted: num(contractedRow.amount), invoiced: num(invoices.amount), collected,
+    refunds: num(payments.refunds), balance: round2(num(contractedRow.amount) - collected),
+    normalExpenses: num(expenses.amount), extraExpenses: num(extraExpenses.amount),
+    projectCosts: num(projectCosts.amount), totalExpenses, bonuses: num(bonuses.amount),
+    profit, margin: margin(collected, profit),
+  };
   const byClient = await query(`select c.id, c.nombre_empresa as name, c.codigo_cliente as code,
     coalesce((select sum(ct.valor_contrato) from public.contratos ct join public.proyectos p on p.id=ct.proyecto_id
       where p.cliente_id=c.id and ct.estado <> 'cancelado'),0) as contracted,
@@ -144,8 +176,8 @@ export async function getAccountingOverview(from, to) {
   const decoratedClients = byClient.map(decorate); const decoratedProjects = byProject.map(decorate);
   return { totals, byClient: decoratedClients, byProject: decoratedProjects,
     counts: { quotes: (await queryOne('select count(*)::int c from public.cotizaciones')).c,
-      invoices: rows.invoices.length, payments: rows.payments.length, expenses: rows.expenses.length,
-      extraExpenses: rows.extraExpenses.length, bonuses: rows.bonuses.length, contracts: rows.contracts.length },
+      invoices: invoices.count, payments: payments.count, expenses: expenses.count,
+      extraExpenses: extraExpenses.count, bonuses: bonuses.count, contracts: contracts.count },
     receivables: decoratedClients.filter((row) => row.balance > 0) };
 }
 
@@ -182,31 +214,35 @@ export async function getManagementOverview(from, to, userId) {
 
 /** Informe de Marketing sobre datos reales. */
 export async function getMarketingOverview() {
-  const campaigns = await query(`select c.id, c.nombre as name, c.canal as channel, c.objetivo as objective,
+  const [campaigns, campaignTotals, byChannel, leadFunnel, leads] = await Promise.all([
+    query(`select c.id, c.nombre as name, c.canal as channel, c.objetivo as objective,
     c.presupuesto as budget, c.fecha_inicio as start_date, c.fecha_finalizacion as end_date,
     c.estado as status, c.observaciones as notes, c.fecha_creacion as created_at,
-    coalesce((select sum(m.inversion) from public.metricas_campanas m where m.campana_id=c.id),0) as spent,
-    coalesce((select sum(m.prospectos) from public.metricas_campanas m where m.campana_id=c.id),0) as leads,
-    coalesce((select sum(m.conversiones) from public.metricas_campanas m where m.campana_id=c.id),0) as conversions,
-    coalesce((select sum(m.clics) from public.metricas_campanas m where m.campana_id=c.id),0) as clicks,
-    coalesce((select sum(m.impresiones) from public.metricas_campanas m where m.campana_id=c.id),0) as impressions
-    from public.campanas c order by c.fecha_creacion desc`);
-  const metrics = campaignMetrics({ spent: campaigns.reduce((a,c)=>a+num(c.spent),0),
-    leads: campaigns.reduce((a,c)=>a+num(c.leads),0), conversions: campaigns.reduce((a,c)=>a+num(c.conversions),0),
-    clicks: campaigns.reduce((a,c)=>a+num(c.clicks),0), impressions: campaigns.reduce((a,c)=>a+num(c.impressions),0) });
-  const byChannel = Object.values(campaigns.reduce((acc,c)=>{ const key=c.channel||'Sin canal';
-    (acc[key] ||= {channel:key,budget:0,spent:0,leads:0,conversions:0}); acc[key].budget+=num(c.budget);
-    acc[key].spent+=num(c.spent); acc[key].leads+=num(c.leads); acc[key].conversions+=num(c.conversions); return acc;
-  },{})).map((row)=>({...row,budget:round2(row.budget),spent:round2(row.spent)}));
-  const leads = await query(`select id, nombre_empresa as company_name, nombre_contacto as contact_name,
-    correo_electronico as email, telefono as phone, origen as source, servicio_interes as interest,
-    valor_estimado as estimated_value, estado as status, asignado_a as assigned_to,
-    cliente_convertido_id as converted_client_id, observaciones as notes, fecha_creacion as created_at
-    from public.prospectos order by fecha_creacion desc`);
-  const leadFunnel = Object.values(leads.reduce((acc,lead)=>{ (acc[lead.status] ||= {status:lead.status,count:0,value:0});
-    acc[lead.status].count+=1; acc[lead.status].value+=num(lead.estimated_value); return acc;
-  },{})).map((row)=>({...row,value:round2(row.value)}));
-  return { indicators: {...metrics,campaigns:campaigns.length,totalLeads:leads.length,budget:sum(campaigns,'budget')}, campaigns, byChannel, leadFunnel };
+    coalesce(m.spent,0) as spent, coalesce(m.leads,0) as leads,
+    coalesce(m.conversions,0) as conversions, coalesce(m.clicks,0) as clicks, coalesce(m.impressions,0) as impressions
+    from public.campanas c left join (select campana_id, sum(inversion) as spent, sum(prospectos) as leads,
+      sum(conversiones) as conversions, sum(clics) as clicks, sum(impresiones) as impressions
+      from public.metricas_campanas group by campana_id) m on m.campana_id=c.id
+    order by c.fecha_creacion desc limit 100`),
+    queryOne(`select (select count(*)::int from public.campanas) as count,
+      (select coalesce(sum(presupuesto),0) from public.campanas) as budget,
+      coalesce(sum(inversion),0) as spent, coalesce(sum(prospectos),0) as leads,
+      coalesce(sum(conversiones),0) as conversions, coalesce(sum(clics),0) as clicks,
+      coalesce(sum(impresiones),0) as impressions from public.metricas_campanas`),
+    query(`with budgets as (select coalesce(canal,'Sin canal') as channel, sum(presupuesto) as budget
+      from public.campanas group by coalesce(canal,'Sin canal')),
+      metrics as (select coalesce(c.canal,'Sin canal') as channel, sum(m.inversion) as spent,
+      sum(m.prospectos) as leads, sum(m.conversiones) as conversions from public.metricas_campanas m
+      join public.campanas c on c.id=m.campana_id group by coalesce(c.canal,'Sin canal'))
+      select b.channel, b.budget, coalesce(m.spent,0) as spent, coalesce(m.leads,0) as leads,
+      coalesce(m.conversions,0) as conversions from budgets b left join metrics m using(channel) order by b.channel`),
+    query(`select estado as status, count(*)::int as count, coalesce(sum(valor_estimado),0) as value
+      from public.prospectos group by estado order by estado`),
+    queryOne('select count(*)::int as count from public.prospectos'),
+  ]);
+  const metrics = campaignMetrics(campaignTotals);
+  return { indicators: {...metrics,campaigns:campaignTotals.count,totalLeads:leads.count,budget:num(campaignTotals.budget)},
+    campaigns, byChannel, leadFunnel: leadFunnel.map((row)=>({...row, value:round2(row.value)})) };
 }
 
 /** Ficha financiera de un cliente (para la vista de detalle). */

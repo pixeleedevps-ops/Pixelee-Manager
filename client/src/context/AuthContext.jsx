@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import {
   api, getToken, saveSession, clearSession,
 } from '../lib/api';
@@ -9,15 +9,37 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [permissions, setPermissions] = useState([]);
   const [schema, setSchema] = useState(null);
+  const [schemaLoading, setSchemaLoading] = useState(false);
   const [options, setOptions] = useState({});
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState('');
+  const optionsCache = useRef({});
+  const optionsRequest = useRef(null);
+  const bootstrapStarted = useRef(false);
 
-  const loadOptions = useCallback(async () => {
+  const loadOptions = useCallback(async (keys = [], force = false) => {
+    const requested = [...new Set(keys)];
+    if (force) requested.forEach((key) => { delete optionsCache.current[key]; });
+    const missing = requested.filter((key) => !Object.hasOwn(optionsCache.current, key));
+    if (!missing.length) return optionsCache.current;
+    if (optionsRequest.current) await optionsRequest.current;
+    const stillMissing = missing.filter((key) => !Object.hasOwn(optionsCache.current, key));
+    if (!stillMissing.length) return optionsCache.current;
     try {
-      const data = await api('/options');
-      setOptions(data.options || {});
-    } catch { /* se mostrará en cada formulario si hace falta */ }
+      optionsRequest.current = api('/options', { params: { keys: stillMissing.join(',') } });
+      const data = await optionsRequest.current;
+      optionsCache.current = { ...optionsCache.current, ...(data.options || {}) };
+      setOptions(optionsCache.current);
+    } catch { /* el formulario mostrará sus errores de carga */ }
+    finally { optionsRequest.current = null; }
+    return optionsCache.current;
+  }, []);
+
+  const loadSchema = useCallback(async () => {
+    setSchemaLoading(true);
+    try { setSchema(await api('/schema')); }
+    catch { setSchema(null); }
+    finally { setSchemaLoading(false); }
   }, []);
 
   const bootstrap = useCallback(async () => {
@@ -28,11 +50,10 @@ export function AuthProvider({ children }) {
       return;
     }
     try {
-      const [me, sch] = await Promise.all([api('/auth/me'), api('/schema')]);
+      const me = await api('/auth/me');
       setUser(me.user);
       setPermissions(me.permissions || []);
-      setSchema(sch);
-      await loadOptions();
+      loadSchema();
     } catch (e) {
       setUser(null);
       setPermissions([]);
@@ -41,17 +62,19 @@ export function AuthProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [loadOptions]);
+  }, [loadSchema]);
 
-  useEffect(() => { bootstrap(); }, [bootstrap]);
+  useEffect(() => {
+    if (bootstrapStarted.current) return;
+    bootstrapStarted.current = true;
+    bootstrap();
+  }, [bootstrap]);
 
   const applySession = async (data) => {
     saveSession(data);
     setUser(data.user);
     setPermissions(data.permissions || []);
-    const sch = await api('/schema');
-    setSchema(sch);
-    await loadOptions();
+    loadSchema();
     return data.user;
   };
 
@@ -70,6 +93,7 @@ export function AuthProvider({ children }) {
     setPermissions([]);
     setSchema(null);
     setOptions({});
+    optionsCache.current = {};
   };
 
   // useCallback: identidad estable. Si no, los efectos que dependen de [can]
@@ -81,7 +105,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, permissions, loading, schema, options, authError,
+      user, permissions, loading, schema, schemaLoading, options, authError,
       login, signup, logout, can, applySession, reloadOptions: loadOptions,
     }}>
       {children}

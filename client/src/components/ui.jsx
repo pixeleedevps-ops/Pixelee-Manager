@@ -1,43 +1,56 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Loader2, AlertTriangle } from 'lucide-react';
 
 /* ---------------- Modal ---------------- */
 export function Modal({ open, onClose, title, children, footer, wide }) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => e.key === 'Escape' && onClose();
+    const scrollY = window.scrollY;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousRootOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    const onKey = (e) => e.key === 'Escape' && onCloseRef.current?.();
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousRootOverflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
 
   if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+  return createPortal((
+    <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto overscroll-contain p-4 sm:p-6">
+      <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-xl" onClick={onClose} />
       <div
-        className={`relative bg-white rounded-xl shadow-2xl w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} max-h-[90vh] flex flex-col`}
+        className={`relative my-auto flex w-full min-h-0 max-h-[calc(100dvh-2rem)] sm:max-h-[90dvh] flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/80 shadow-[0_24px_80px_rgba(0,0,0,0.32)] backdrop-blur-2xl ${wide ? 'max-w-3xl' : 'max-w-lg'}`}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+        <div className="flex shrink-0 items-center justify-between border-b border-white/70 bg-white/45 px-5 py-4 sm:px-6">
           <h3 className="font-semibold text-slate-800">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition" aria-label="Cerrar">
             <X size={18} />
           </button>
         </div>
-        <div className="px-6 py-4 overflow-y-auto">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">{children}</div>
         {footer && (
-          <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2 bg-slate-50 rounded-b-xl">
+          <div className="flex shrink-0 justify-end gap-2 border-t border-white/70 bg-white/55 px-5 py-4 sm:px-6">
             {footer}
           </div>
         )}
       </div>
     </div>
-  );
+  ), document.body);
 }
 
 /* ---------------- Botón ---------------- */
 export function Button({ children, variant = 'primary', loading, className = '', ...props }) {
   const variants = {
-    primary: 'bg-slate-900 text-white hover:bg-slate-800',
+    primary: 'bg-[#5170ff] text-white hover:bg-[#405ee8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5170ff]/40 focus-visible:ring-offset-2',
     secondary: 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50',
     danger: 'bg-red-600 text-white hover:bg-red-700',
     ghost: 'text-slate-600 hover:bg-slate-100',
@@ -69,7 +82,7 @@ export function Field({ label, children, hint, required }) {
 }
 
 const inputCls =
-  'w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-500 placeholder:text-slate-400';
+  'w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#5170ff]/20 focus:border-[#5170ff] placeholder:text-slate-400';
 
 export function Input(props) {
   return <input {...props} className={`${inputCls} ${props.className || ''}`} />;
@@ -247,19 +260,28 @@ export function Toast({ message, onClose }) {
 }
 
 /* ---------------- Tabs ---------------- */
-export function Tabs({ tabs, active, onChange }) {
+export function Tabs({ tabs, active, onChange, variant = 'primary', ariaLabel = 'Secciones' }) {
+  const primary = variant === 'primary';
   return (
-    <div className="flex gap-1 border-b border-slate-200 overflow-x-auto">
+    <div role="tablist" aria-label={ariaLabel} className={primary
+      ? 'flex flex-wrap items-center gap-2'
+      : 'flex gap-1 overflow-x-auto border-b border-slate-200'}>
       {tabs.map((t) => (
         <button
           key={t.id}
           onClick={() => onChange(t.id)}
-          className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition ${
-            active === t.id
-              ? 'border-slate-900 text-slate-900'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
+          type="button"
+          role="tab"
+          aria-selected={active === t.id}
+          className={primary
+            ? `inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5170ff]/40 ${active === t.id
+              ? 'border-[#5170ff] bg-[#5170ff] text-white shadow-sm'
+              : 'border-slate-200 bg-white text-slate-600 hover:border-[#5170ff]/40 hover:text-[#5170ff]'}`
+            : `inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5170ff]/30 ${active === t.id
+              ? 'border-[#5170ff] text-[#5170ff]'
+              : 'border-transparent text-slate-500 hover:text-slate-800'}`}
         >
+          {primary && active === t.id && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#cef009]" />}
           {t.label}
           {t.count !== undefined && (
             <span className="ml-1.5 text-xs text-slate-400">({t.count})</span>

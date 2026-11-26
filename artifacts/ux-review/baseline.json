@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-11-26",
+  "browser": "Google Chrome installed, authorized profile",
+  "viewport": "1200x900",
+  "measurement": "Direct navigation, wait for screen heading and main loading spinner to clear, then 300ms settling time. Includes app/API/data load in this local environment.",
+  "screens": [
+    { "name": "Dashboard", "path": "/", "loadMs": 4276 },
+    { "name": "Clientes", "path": "/clientes", "loadMs": 1756 },
+    { "name": "Contabilidad", "path": "/contabilidad", "loadMs": 2163 },
+    { "name": "Desarrollo", "path": "/desarrollo", "loadMs": 904 },
+    { "name": "Marketing", "path": "/marketing", "loadMs": 920 },
+    { "name": "Operaciones", "path": "/operaciones", "loadMs": 985 },
+    { "name": "Gerencia", "path": "/gerencia", "loadMs": 2187 },
+    { "name": "Configuración", "path": "/configuracion", "loadMs": 588 }
+  ],
+  "consoleErrors": []
+}

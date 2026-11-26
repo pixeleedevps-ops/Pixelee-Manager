@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Search, Plus, Pencil, Trash2, Eye, ChevronLeft, ChevronRight,
@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { get, post, put, del } from '../lib/api';
+import { resourceUrl } from '../lib/resourceNavigation';
 import {
   fmtMoney, fmtNum, fmtDate, fmtDateTime, label, isMoneyField,
   toDateInput, toDateTimeInput,
@@ -35,7 +36,7 @@ export function renderValue(field, value, fieldDef, options = {}, opts = {}) {
   }
   if (/(_url|^site_url|^file_url|^quote_url|^invoice_url|^contract_url|^receipt_url|^delivery_url|^panel_url|^admin_url)/.test(field)) {
     return (
-      <a href={String(value)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+      <a href={String(value)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#5170ff] hover:underline">
         Ver enlace <ExternalLink size={12} />
       </a>
     );
@@ -66,7 +67,7 @@ const RELATED_TABLE = {
   follow_ups: 'follow_ups',
 };
 
-function RelatedTable({ name, rows, schema, options }) {
+export function RelatedTable({ name, rows, schema, options, filters = {} }) {
   const table = RELATED_TABLE[name] || name;
   const def = schema?.entities.find((e) => e.table === table);
   if (!rows?.length) return null;
@@ -76,9 +77,12 @@ function RelatedTable({ name, rows, schema, options }) {
     .slice(0, 5);
   return (
     <div className="mb-5">
-      <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">
-        {def?.label || label(name)} <span className="text-slate-400">({rows.length})</span>
-      </h4>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500">
+          {def?.label || label(name)} <span className="text-slate-400">({rows.length})</span>
+        </h4>
+        {resourceUrl(table, { filters }) && <Link to={resourceUrl(table, { filters })} className="text-xs font-semibold text-[#5170ff] hover:underline">Abrir administración</Link>}
+      </div>
       <div className="overflow-x-auto border border-slate-200 rounded-lg">
         <table className="w-full text-xs">
           <thead className="bg-slate-50">
@@ -90,7 +94,7 @@ function RelatedTable({ name, rows, schema, options }) {
                 {keys.map((k) => (
                   <td key={k} className="px-3 py-2 text-slate-600">
                     {name === 'projects' && k === 'project_name' && r.id
-                      ? <Link to={`/proyectos/${r.id}`} className="font-medium text-blue-700 hover:underline">{r[k] || 'Proyecto'}</Link>
+                      ? <Link to={`/proyectos/${r.id}`} className="font-medium text-[#5170ff] hover:underline">{r[k] || 'Proyecto'}</Link>
                       : renderValue(k, r[k], def?.fields?.[k], options)}
                   </td>
                 ))}
@@ -155,13 +159,18 @@ function FormField({ name, def, value, onChange, options }) {
 /* ─── Página de recurso ───────────────────────────────────────────────────── */
 export default function ResourcePage({
   entity, title, description, compact = false,
-  defaultFilters = {}, onChanged, display = 'table', summaryFields = [],
+  defaultFilters = {}, onChanged, onFiltersCleared, display = 'table', summaryFields = [], autoCreate = false, onAutoCreateHandled,
 }) {
-  const { schema, options, reloadOptions, can } = useAuth();
+  const { schema, schemaLoading, options, reloadOptions, can } = useAuth();
   const def = useMemo(
     () => schema?.entities.find((e) => e.entity === entity) || null,
     [schema, entity]
   );
+  useEffect(() => {
+    if (!def) return;
+    const keys = (def.filters || []).filter((key) => def.fields[key]?.type.replace('!', '') === 'u');
+    if (keys.length) reloadOptions(keys);
+  }, [def, reloadOptions]);
 
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
@@ -186,38 +195,31 @@ export default function ResourcePage({
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal) => {
     if (!def) return;
     setLoading(true);
     setError('');
     try {
-      const data = await get(`/resources/${entity}`, { q, page, pageSize, ...filters });
+      const data = await get(`/resources/${entity}`, { q, page, pageSize, ...filters }, { signal });
       setItems(data.items || []);
       setTotal(data.total || 0);
     } catch (e) {
-      setError(e.message);
+      if (e.name !== 'AbortError') setError(e.message);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [def, entity, q, page, pageSize, filters]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
-  if (!def) {
-    return <EmptyState icon={Inbox} title="Esquema no disponible" description="No se pudo cargar la definición de esta entidad desde Supabase." />;
-  }
-
-  const columns = visibleColumns(def, items);
-  const detailFields = Object.keys(def.fields).length
-    ? Object.entries(def.fields)
-    : Object.entries(detail?.item || {})
-        .filter(([k]) => !['old_data', 'new_data'].includes(k))
-        .map(([k]) => [k, { type: k.includes('date') || k.includes('_at') ? 'dt' : 's', label: label(k) }]);
-  const canManage = !def.readonly && !!def.manage && can(def.manage);
-  const canCreate = def.creatable && canManage;
-  const pages = Math.max(1, Math.ceil(total / pageSize));
-
-  const openCreate = () => {
+  const optionKeys = Object.entries(def?.fields || {}).filter(([, field]) => field.type.replace('!', '') === 'u').map(([key]) => key);
+  const openCreate = async () => {
+    if (!def) return;
+    await reloadOptions(optionKeys);
     const initial = {};
     for (const [k, f] of Object.entries(def.fields)) {
       initial[k] = f.type.replace('!', '') === 'b' ? false : '';
@@ -228,7 +230,39 @@ export default function ResourcePage({
     setForm({ mode: 'create' });
   };
 
-  const openEdit = (item) => {
+  const canManage = !!def && !def.readonly && !!def.manage && can(def.manage);
+  const canCreate = !!def?.creatable && canManage;
+  const autoCreateHandled = useRef(false);
+  useEffect(() => {
+    if (!autoCreate) {
+      autoCreateHandled.current = false;
+      return;
+    }
+    if (!def || autoCreateHandled.current) return;
+    autoCreateHandled.current = true;
+    if (!canCreate) {
+      onAutoCreateHandled?.();
+      return;
+    }
+    openCreate().finally(() => onAutoCreateHandled?.());
+  }, [autoCreate, def, canCreate, reloadOptions, onAutoCreateHandled]);
+
+  if (!def) {
+    if (schemaLoading) return <Spinner />;
+    return <EmptyState icon={Inbox} title="Esquema no disponible" description="No se pudo cargar la definición de esta entidad desde Supabase." />;
+  }
+
+  const columns = visibleColumns(def, items);
+  const hasRowIdentity = items.some((row) => row.id !== null && row.id !== undefined);
+  const detailFields = Object.keys(def.fields).length
+    ? Object.entries(def.fields)
+    : Object.entries(detail?.item || {})
+        .filter(([k]) => !['old_data', 'new_data'].includes(k))
+        .map(([k]) => [k, { type: k.includes('date') || k.includes('_at') ? 'dt' : 's', label: label(k) }]);
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+
+  const openEdit = async (item) => {
+    await reloadOptions(optionKeys);
     const vals = {};
     for (const [k, f] of Object.entries(def.fields)) {
       const t = f.type.replace('!', '');
@@ -253,7 +287,7 @@ export default function ResourcePage({
       else await post(`/resources/${entity}`, formValues);
       setForm(null);
       setToast(form.mode === 'edit' ? 'Registro actualizado.' : 'Registro creado.');
-      await reloadOptions();
+      await reloadOptions(optionKeys, true);
       await load();
       onChanged?.();
     } catch (err) {
@@ -268,7 +302,7 @@ export default function ResourcePage({
       await del(`/resources/${entity}/${confirm.id}`);
       setToast('Registro eliminado.');
       setConfirm(null);
-      await reloadOptions();
+      await reloadOptions(optionKeys, true);
       await load();
       onChanged?.();
     } catch (e) {
@@ -330,7 +364,7 @@ export default function ResourcePage({
           </div>
         ))}
         {(q || Object.values(filters).some(Boolean)) && (
-          <Button variant="ghost" className="!px-3 !py-2" onClick={() => { setSearchInput(''); setQ(''); setFilters({}); setPage(1); }}>
+          <Button variant="ghost" className="!px-3 !py-2" onClick={() => { setSearchInput(''); setQ(''); setFilters({}); setPage(1); onFiltersCleared?.(); }}>
             <X size={14} /> Limpiar
           </Button>
         )}
@@ -371,7 +405,7 @@ export default function ResourcePage({
                     ))}
                   </dl>
                   <div className="flex items-center justify-between gap-2 border-t border-slate-100 mt-4 pt-3">
-                    <button onClick={() => openDetail(row.id)} className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:text-blue-900">
+                    <button onClick={() => openDetail(row.id)} className="inline-flex items-center gap-1.5 text-sm font-medium text-[#5170ff] hover:text-[#405ee8]">
                       <Eye size={15} /> Ver ficha y relaciones
                     </button>
                     <div className="flex items-center">
@@ -393,15 +427,15 @@ export default function ResourcePage({
         </>
       ) : (
         <>
-          <Table columns={[...columns.map(([, f]) => ({ label: f.label })), { label: 'Acciones', align: 'right' }]}>
-            {items.map((row) => (
-              <tr key={row.id} className="hover:bg-slate-50/70">
+          <Table columns={[...columns.map(([, f]) => ({ label: f.label })), ...((hasRowIdentity || canManage) ? [{ label: 'Acciones', align: 'right' }] : [])]}>
+            {items.map((row, index) => (
+              <tr key={row.id ?? row.filename ?? `${entity}-${index}`} className="hover:bg-slate-50/70">
                 {columns.map(([k, f]) => <td key={k} className="px-4 py-3 text-slate-600">{renderValue(k, row[k], f, options)}</td>)}
-                <td className="px-4 py-3 text-right whitespace-nowrap">
-                  <button onClick={() => openDetail(row.id)} className="p-1.5 text-slate-400 hover:text-blue-600" title="Ver detalle"><Eye size={15} /></button>
+                {(hasRowIdentity || canManage) && <td className="px-4 py-3 text-right whitespace-nowrap">
+                  {row.id != null && <button onClick={() => openDetail(row.id)} className="p-1.5 text-slate-400 hover:text-[#5170ff]" title="Ver detalle"><Eye size={15} /></button>}
                   {canManage && <button onClick={() => openEdit(row)} className="p-1.5 text-slate-400 hover:text-slate-800" title="Editar"><Pencil size={15} /></button>}
                   {canManage && def.deletable && <button onClick={() => setConfirm({ id: row.id, name: row[columns[0][0]] })} className="p-1.5 text-slate-400 hover:text-red-600" title="Eliminar"><Trash2 size={15} /></button>}
-                </td>
+                </td>}
               </tr>
             ))}
           </Table>
@@ -448,8 +482,23 @@ export default function ResourcePage({
             {Object.entries(detail.related).filter(([, rows]) => rows?.length).length === 0
               ? <p className="text-sm text-slate-400">No hay registros relacionados todavía.</p>
               : Object.entries(detail.related).map(([key, rows]) => (
-                <RelatedTable key={key} name={key} rows={rows} schema={schema} options={options} />
+                    <RelatedTable key={key} name={key} rows={rows} schema={schema} options={options}
+                      filters={def.entity === 'clients' ? { client_id: detail.item.id } : def.entity === 'projects' ? { project_id: detail.item.id } : {}} />
               ))}
+            {Object.keys(detail.related).length > 0 && (
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Administrar información relacionada</h4>
+                <div className="flex flex-wrap gap-2">
+                  {Object.keys(detail.related).map((key) => {
+                    const table = RELATED_TABLE[key] || key;
+                    const contextualFilters = def.entity === 'clients' ? { client_id: detail.item.id } : def.entity === 'projects' ? { project_id: detail.item.id } : {};
+                    const destination = resourceUrl(table, { filters: contextualFilters });
+                    const relatedDef = schema?.entities.find((item) => item.entity === table || item.table === table);
+                    return destination ? <Link key={key} to={destination} className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-[#5170ff] hover:border-[#5170ff]/40 hover:bg-[#5170ff]/5">{relatedDef?.label || label(key)}</Link> : null;
+                  })}
+                </div>
+              </div>
+            )}
           </>
         )}
       </Modal>

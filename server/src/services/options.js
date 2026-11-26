@@ -29,9 +29,12 @@ export const OPTION_SOURCES = {
 import { query, TABLE_NAMES, COLUMN_NAMES } from '../db.js';
 
 /** Devuelve {id, label} de todas las fuentes, limitado a 500 por tabla. */
-export async function getAllOptions() {
+export async function getAllOptions(requestedKeys = []) {
   const out = {};
-  const jobs = Object.entries(OPTION_SOURCES).map(async ([key, src]) => {
+  const sources = requestedKeys.length
+    ? Object.entries(OPTION_SOURCES).filter(([key]) => requestedKeys.includes(key))
+    : Object.entries(OPTION_SOURCES);
+  const jobs = sources.map(async ([key, src]) => {
     try {
       const rows = await query(
         `select id, ${(COLUMN_NAMES[src.table]?.[src.label] || src.label)}::text as label from public.${TABLE_NAMES[src.table] || src.table} order by ${(COLUMN_NAMES[src.table]?.[src.label] || src.label)} asc limit 500`

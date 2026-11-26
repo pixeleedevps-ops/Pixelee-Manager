@@ -40,7 +40,7 @@ async function tryRefresh() {
 }
 
 /** Petición JSON centralizada: token, refresh automático y manejo de errores. */
-export async function api(path, { method = 'GET', body, params, retry = true } = {}) {
+export async function api(path, { method = 'GET', body, params, retry = true, signal } = {}) {
   let url = `/api${path}`;
   if (params) {
     const qs = new URLSearchParams();
@@ -58,10 +58,11 @@ export async function api(path, { method = 'GET', body, params, retry = true } =
   const res = await fetch(url, {
     method, headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal,
   });
 
   if (res.status === 401 && retry && !path.startsWith('/auth/')) {
-    if (await tryRefresh()) return api(path, { method, body, params, retry: false });
+    if (await tryRefresh()) return api(path, { method, body, params, retry: false, signal });
     clearSession();
     if (!path.startsWith('/auth/login')) window.location.href = '/login';
   }
@@ -83,7 +84,7 @@ export async function api(path, { method = 'GET', body, params, retry = true } =
   return data;
 }
 
-export const get = (path, params) => api(path, { params });
+export const get = (path, params, options = {}) => api(path, { params, ...options });
 export const post = (path, body) => api(path, { method: 'POST', body });
 export const put = (path, body) => api(path, { method: 'PUT', body });
 export const del = (path) => api(path, { method: 'DELETE' });

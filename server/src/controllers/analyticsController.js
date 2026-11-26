@@ -1,6 +1,7 @@
 import {
   getDashboard, getAccountingOverview, getManagementOverview,
   getMarketingOverview, getClientFinancials, getProjectFinancials,
+  getDashboardSummary, getDashboardDetails,
 } from '../services/analytics.js';
 import { distributeProfits, computeDocumentTotals } from '../services/finance.js';
 
@@ -15,6 +16,14 @@ function check(req, res, perm) {
 /** GET /api/dashboard */
 export async function dashboard(_req, res) {
   return res.json(await getDashboard());
+}
+
+export async function dashboardSummary(_req, res) {
+  return res.json(await getDashboardSummary());
+}
+
+export async function dashboardDetails(_req, res) {
+  return res.json(await getDashboardDetails());
 }
 
 /** GET /api/accounting/overview?from=&to= */
