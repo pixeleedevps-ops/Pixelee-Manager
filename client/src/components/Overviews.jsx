@@ -1,36 +1,20 @@
-import { useEffect, useState } from 'react';
-import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
-  PieChart, Pie, Cell,
-} from 'recharts';
+import { lazy, Suspense } from 'react';
 import {
   Building2, FolderKanban, Wallet, TrendingDown, TrendingUp, Receipt,
   FileSpreadsheet, Target, Megaphone, Users, Clock, Package, Lock, Eye,
-  Activity, AlertCircle, Globe2, Server, RefreshCw, Ticket, Shield, Database,
+  Activity, AlertCircle, Globe2, Server, RefreshCw, Ticket, Database,
   CircleDollarSign, PiggyBank, ArrowDownToLine, BarChart3,
 } from 'lucide-react';
-import { get } from '../lib/api';
+import { useData } from '../lib/useData';
 import { fmtMoney, fmtNum, fmtDate, fmtDateTime, label } from '../lib/format';
 import { StatCard, Table, Badge, statusColor, Spinner, EmptyState } from './ui';
+import { Section } from './OverviewUi';
 
-const COLORS = ['#0f172a', '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
-const tooltipStyle = { backgroundColor: '#0f172a', border: 'none', borderRadius: 8, color: '#fff', fontSize: 12 };
+const ChannelChart = lazy(() => import('./MarketingCharts').then((m) => ({ default: m.ChannelChart })));
+const LeadFunnelChart = lazy(() => import('./MarketingCharts').then((m) => ({ default: m.LeadFunnelChart })));
 
-/** Hook de carga con estados de carga / error / vacío. */
-export function useData(path) {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    get(path).then((d) => { if (alive) { setData(d); setError(''); } })
-      .catch((e) => { if (alive) setError(e.message); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [path]);
-  return { data, error, loading };
-}
+
+export { useData };
 
 function State({ loading, error, children, empty }) {
   if (loading) return <Spinner />;
@@ -39,19 +23,7 @@ function State({ loading, error, children, empty }) {
   return children;
 }
 
-export function Section({ title, icon: Icon, children, extra }) {
-  return (
-    <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-          {Icon && <Icon size={16} className="text-slate-500" />}{title}
-        </h2>
-        {extra}
-      </div>
-      {children}
-    </section>
-  );
-}
+export { Section };
 
 /* ───────────────────────── CONTABILIDAD ─────────────────────────────────── */
 export function AccountingOverview() {
@@ -130,31 +102,8 @@ export function MarketingOverview() {
         </div>
 
         <div className="grid lg:grid-cols-2 gap-4 mt-4">
-          <Section title="Inversión por canal" icon={Megaphone}>
-            {data.byChannel.length ? (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={data.byChannel}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="channel" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v) => fmtMoney(v)} />
-                  <Bar dataKey="spent" name="Inversión" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <p className="text-sm text-slate-400">Sin campañas registradas.</p>}
-          </Section>
-          <Section title="Embudo de prospectos" icon={Target}>
-            {data.leadFunnel.length ? (
-              <ResponsiveContainer width="100%" height={240}>
-                <PieChart>
-                  <Pie data={data.leadFunnel} dataKey="count" nameKey="status" outerRadius={85} label={(e) => `${label(e.status)}: ${e.count}`}>
-                    {data.leadFunnel.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [v, label(n)]} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : <p className="text-sm text-slate-400">Sin prospectos registrados.</p>}
-          </Section>
+          {data.byChannel.length ? <Suspense fallback={<Section title="Inversión por canal"><Spinner /></Section>}><ChannelChart rows={data.byChannel} /></Suspense> : <Section title="Inversión por canal"><p className="text-sm text-slate-400">Sin campañas registradas.</p></Section>}
+          {data.leadFunnel.length ? <Suspense fallback={<Section title="Embudo de prospectos"><Spinner /></Section>}><LeadFunnelChart rows={data.leadFunnel} /></Suspense> : <Section title="Embudo de prospectos"><p className="text-sm text-slate-400">Sin prospectos registrados.</p></Section>}
         </div>
 
         <div className="mt-4">
@@ -201,9 +150,9 @@ export function ManagementOverview() {
         </div>
 
         {/* Sección privada del administrador */}
-        <div className="mt-4 rounded-xl border-2 border-indigo-200 bg-indigo-50/50 p-5">
-          <h2 className="text-sm font-bold text-indigo-900 flex items-center gap-2 mb-4">
-            <Lock size={16} /> Mis utilidades y participaciones <span className="text-xs font-normal text-indigo-500">· Solo visible para ti</span>
+        <div className="mt-4 rounded-xl border-2 border-[#5170ff]/25 bg-[#5170ff]/5 p-5">
+          <h2 className="text-sm font-bold text-[#3149bc] flex items-center gap-2 mb-4">
+            <Lock size={16} /> Mis utilidades y participaciones <span className="text-xs font-normal text-[#5170ff]">· Solo visible para ti</span>
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <StatCard icon={PiggyBank} label="Acumulado" value={fmtMoney(data.myUtilities.accumulated)} tone="green" />
@@ -411,49 +360,6 @@ export function OperationsOverview() {
               ))}
             </div>
             <p className="text-xs text-slate-400 mt-3">Usa las pestañas de arriba para administrar cada entidad. Los vencimientos de dominios y hosting se controlan en <strong>Renovaciones</strong>.</p>
-          </Section>
-        </div>
-      </>}
-    </State>
-  );
-}
-
-/* ───────────────────────── CONFIGURACIÓN ────────────────────────────────── */
-export function SettingsOverview() {
-  const [health, setHealth] = useState(null);
-  const [error, setError] = useState('');
-  useEffect(() => {
-    get('/health').then(setHealth).catch((e) => setError(e.message));
-  }, []);
-  return (
-    <State loading={!health && !error} error={error}>
-      {health && <>
-        <div className="grid sm:grid-cols-3 gap-3">
-          <StatCard icon={Database} label="Servicio API" value={health.ok ? 'Activo' : 'Error'} tone={health.ok ? 'green' : 'red'} />
-          <StatCard icon={Shield} label="Base de datos" value={health.database === 'configurada' ? 'Conectada' : 'Sin configurar'} tone={health.database === 'configurada' ? 'green' : 'red'} />
-          <StatCard icon={Shield} label="Supabase Auth" value={health.supabaseAuth === 'configurada' ? 'Conectado' : 'Sin configurar'} tone={health.supabaseAuth === 'configurada' ? 'green' : 'red'} />
-        </div>
-        <div className="mt-4">
-          <Section title="Arquitectura y seguridad" icon={Shield}>
-            <ul className="text-sm text-slate-600 space-y-2 list-disc list-inside">
-              <li>Los datos provienen <strong>exclusivamente</strong> de tu proyecto Supabase <code className="bg-slate-100 px-1 rounded">pyboszwmrzvzzpekmeps</code>.</li>
-              <li>El esquema existente (31 tablas) se conserva intacto; solo se añadieron 6 tablas incrementales para funcionalidades sin equivalente.</li>
-              <li>RLS permanece activado y sin modificaciones. El backend aplica la matriz de permisos por rol (<code className="bg-slate-100 px-1 rounded">public.profiles.role</code>).</li>
-              <li>Los roles son los reales: administrador, direccion, comercial, desarrollo, finanzas, soporte. No se crearon roles nuevos.</li>
-              <li>Desarrollo, comercial y soporte no pueden leer información financiera ni la vista de Gerencia.</li>
-              <li>El frontend nunca recibe la cadena de conexión ni claves privadas: todas las consultas pasan por Express.</li>
-              <li>Documentos, contratos y comprobantes se gestionan con enlaces manuales (Google Drive API pospuesta para FASE 2).</li>
-            </ul>
-          </Section>
-        </div>
-        <div className="mt-4">
-          <Section title="Esquema de la base de datos" icon={Database}>
-            <p className="text-sm text-slate-600">
-              La referencia completa de tablas, columnas, relaciones, restricciones, triggers y RLS está en
-              <code className="bg-slate-100 px-1 rounded mx-1">SUPABASE_SCHEMA_MAP.md</code>.
-              Los formularios de este panel se generan a partir del catálogo real expuesto por <code className="bg-slate-100 px-1 rounded">/api/schema</code>:
-              no incluyen campos ficticios.
-            </p>
           </Section>
         </div>
       </>}

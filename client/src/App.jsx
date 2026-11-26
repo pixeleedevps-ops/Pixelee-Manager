@@ -1,17 +1,18 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import { Spinner } from './components/ui';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Clients from './pages/Clients';
-import Accounting from './pages/Accounting';
-import Development from './pages/Development';
-import Marketing from './pages/Marketing';
-import Operations from './pages/Operations';
-import Management from './pages/Management';
-import Settings from './pages/Settings';
-import ProjectDetail from './pages/ProjectDetail';
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Clients = lazy(() => import('./pages/Clients'));
+const Accounting = lazy(() => import('./pages/Accounting'));
+const Development = lazy(() => import('./pages/Development'));
+const Marketing = lazy(() => import('./pages/Marketing'));
+const Operations = lazy(() => import('./pages/Operations'));
+const Management = lazy(() => import('./pages/Management'));
+const Settings = lazy(() => import('./pages/Settings'));
+const ProjectDetail = lazy(() => import('./pages/ProjectDetail'));
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -31,7 +32,7 @@ export default function App() {
   if (loading) return <Spinner />;
 
   return (
-    <Routes>
+    <Suspense fallback={<Spinner />}><Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
       <Route element={<Protected><Layout /></Protected>}>
         <Route path="/" element={<Dashboard />} />
@@ -45,6 +46,6 @@ export default function App() {
         <Route path="/configuracion" element={<Guard perm="settings.view"><Settings /></Guard>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-    </Routes>
+    </Routes></Suspense>
   );
 }

@@ -25,7 +25,10 @@ function dbColumn(entity, column) { return COLUMN_NAMES[entity]?.[column] || col
 function dbTable(entity, def = getDef(entity)) { return TABLE_NAMES[entity] || def.table; }
 function selectColumns(entity) {
   const def = getDef(entity);
-  const columns = [...new Set(['id', ...Object.keys(def.fields || {}), ...Object.keys(def.auto || {}), ...Object.keys(COLUMN_NAMES[entity] || {})])];
+  // La tabla técnica schema_migrations usa filename como clave y no tiene id.
+  const columns = entity === 'schema_migrations'
+    ? ['filename', 'applied_at']
+    : [...new Set(['id', ...Object.keys(def.fields || {}), ...Object.keys(def.auto || {}), ...Object.keys(COLUMN_NAMES[entity] || {})])];
   return columns
     .map((column) => `${dbColumn(entity, column)}${dbColumn(entity, column) !== column ? ` as ${column}` : ''}`).join(', ');
 }
@@ -340,7 +343,7 @@ export const RELATIONS = {
   tasks: [{ key: 'time_entries', table: 'time_entries', fk: 'task_id' }],
 };
 
-export async function detail(entity, id) {
+export async function detail(entity, id, { includeRelations = true } = {}) {
   const row = await get(entity, id);
   if (!row) {
     const e = new Error('Registro no encontrado.');
@@ -349,6 +352,7 @@ export async function detail(entity, id) {
   }
   const rels = RELATIONS[entity] || [];
   const related = {};
+  if (!includeRelations) return { item: row, related, relations: rels.filter((r) => CATALOG[r.table]).map((r) => r.key) };
   await Promise.all(rels.map(async (r) => {
     try {
       const relatedDef = getDef(r.table);
@@ -364,6 +368,16 @@ export async function detail(entity, id) {
     }
   }));
   return { item: row, related, relations: rels.filter((r) => CATALOG[r.table]).map((r) => r.key) };
+}
+
+export async function related(entity, id, key) {
+  if (!UUID_RE.test(String(id))) throw bad('Identificador no válido.');
+  const relation = (RELATIONS[entity] || []).find((item) => item.key === key);
+  if (!relation) throw bad('Relación no válida.');
+  const def = getDef(relation.table);
+  const fk = dbColumn(relation.table, relation.fk);
+  const created = dbColumn(relation.table, 'created_at');
+  return query(`select ${selectColumns(relation.table)} from public.${dbTable(relation.table, def)} where ${fk} = $1 order by ${created} desc limit 100`, [id]);
 }
 
 export { withTransaction };

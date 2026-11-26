@@ -34,6 +34,7 @@ export function buildRoutes() {
   // CRUD genérico sobre las 37 entidades del esquema real
   const resources = Router();
   resources.get('/:entity/schema', wrap(res.getEntitySchema));
+  resources.get('/:entity/:id/related/:relation', wrap(res.related));
   resources.get('/:entity/:id/detail', wrap(res.detail));
   resources.get('/:entity/:id', wrap(res.get));
   resources.get('/:entity', wrap(res.list));
@@ -44,6 +45,8 @@ export function buildRoutes() {
 
   // Vistas consolidadas (cálculos en backend)
   api.get('/dashboard', wrap(an.dashboard));
+  api.get('/dashboard/summary', wrap(an.dashboardSummary));
+  api.get('/dashboard/details', wrap(an.dashboardDetails));
   api.get('/accounting/overview', wrap(an.accounting));
   api.get('/management/overview', wrap(an.management));
   api.get('/marketing/overview', wrap(an.marketing));

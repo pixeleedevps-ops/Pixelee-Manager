@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Mail, Lock, User, ArrowRight, AlertCircle, Info } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, AlertCircle, Info } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Button, Input, Field } from '../components/ui';
 
@@ -47,16 +47,8 @@ export default function Login() {
   return (
     <div className="min-h-screen flex">
       {/* Panel lateral */}
-      <div className="hidden lg:flex w-1/2 bg-slate-900 flex-col justify-between p-12 text-white">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-            <Sparkles size={20} />
-          </div>
-          <div>
-            <p className="font-bold tracking-wide">PIXELÉE</p>
-            <p className="text-slate-400 text-xs tracking-[0.25em]">MANAGER</p>
-          </div>
-        </div>
+      <div className="hidden lg:flex w-1/2 bg-[#09090b] flex-col justify-between p-12 text-white">
+        <img src="/brand-logo.png" alt="PIXELÉE Manager" className="h-12 w-[156px] object-contain object-left" />
         <div>
           <h1 className="text-3xl font-bold leading-tight">Toda la operación<br />en un solo lugar.</h1>
           <p className="text-slate-400 mt-4 max-w-md text-sm leading-relaxed">
@@ -65,7 +57,7 @@ export default function Login() {
           </p>
           <div className="mt-8 flex flex-wrap gap-2">
             {['Clientes', 'Contabilidad', 'Desarrollo', 'Marketing', 'Operaciones', 'Gerencia'].map((x) => (
-              <span key={x} className="text-xs px-3 py-1.5 rounded-full bg-white/10 text-slate-300">{x}</span>
+              <span key={x} className="text-xs px-3 py-1.5 rounded-full border border-white/10 bg-white/5 text-slate-300">{x}</span>
             ))}
           </div>
         </div>
@@ -76,9 +68,10 @@ export default function Login() {
       <div className="flex-1 flex items-center justify-center p-6 bg-slate-50">
         <div className="w-full max-w-md">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
-            <div className="lg:hidden flex items-center gap-2.5 mb-7">
-              <div className="w-9 h-9 rounded-lg bg-slate-900 flex items-center justify-center text-white"><Sparkles size={18} /></div>
-              <p className="font-bold text-slate-900">PIXELÉE MANAGER</p>
+            <div className="lg:hidden mb-7">
+              <div className="inline-flex rounded-lg bg-[#09090b] px-3 py-2">
+                <img src="/brand-logo.png" alt="PIXELÉE Manager" className="h-8 w-[104px] object-contain" />
+              </div>
             </div>
 
             <h2 className="text-xl font-bold text-slate-900">

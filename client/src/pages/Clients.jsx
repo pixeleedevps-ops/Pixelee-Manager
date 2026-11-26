@@ -5,13 +5,12 @@ export default function Clients() {
   return (
     <ModulePage
       title="Clientes"
-      description="Empresas, contactos y toda su información relacionada desde una misma vista"
+      description="Empresas, contactos y documentos. Los proyectos y otros datos relacionados se abren desde la ficha del cliente."
       overview={<ClientsOverview />}
       tabs={[
-        { id: 'clients', label: 'Cartera de clientes', entity: 'clients', display: 'cards', summaryFields: ['company_name', 'client_type', 'email', 'city', 'status'] },
-        { id: 'projects', label: 'Proyectos activos', entity: 'projects', display: 'cards', defaultFilters: { status: 'en_proceso' }, summaryFields: ['project_name', 'client_id', 'status', 'priority', 'estimated_delivery_date'] },
-        { id: 'contacts', label: 'Contactos', entity: 'contacts' },
-        { id: 'documents', label: 'Documentos', entity: 'documents' },
+        { id: 'clients', label: 'Cartera de clientes', group: 'Cartera', entity: 'clients', display: 'cards', summaryFields: ['company_name', 'client_type', 'email', 'city', 'status'] },
+        { id: 'contacts', label: 'Contactos', group: 'Contactos y documentos', entity: 'contacts' },
+        { id: 'documents', label: 'Documentos', group: 'Contactos y documentos', entity: 'documents' },
       ]}
     />
   );

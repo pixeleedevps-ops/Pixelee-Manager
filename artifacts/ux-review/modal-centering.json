@@ -1,0 +1,26 @@
+{
+  "capturedAt": "2026-11-26",
+  "browser": "Installed Google Chrome, signed-in profile",
+  "result": "pass",
+  "glass": {
+    "backdropFilter": "blur(24px)",
+    "dialogBackdropFilter": "blur(40px)"
+  },
+  "measurements": [
+    { "viewport": "1440x900", "modal": "Create menu", "rect": [464, 114, 512, 672], "centerDelta": [0, 0], "fullyVisible": true },
+    { "viewport": "1440x900", "modal": "Project form", "rect": [336, 45, 768, 810], "centerDelta": [0, 0], "fullyVisible": true },
+    { "viewport": "1440x900", "modal": "Quote form", "rect": [336, 119, 768, 663], "centerDelta": [0, 0], "fullyVisible": true },
+    { "viewport": "1280x620", "modal": "Create menu", "rect": [384, 51, 512, 518], "centerDelta": [0, 0], "fullyVisible": true },
+    { "viewport": "1280x620", "modal": "Hosting form", "rect": [256, 31, 768, 558], "centerDelta": [0, 0], "fullyVisible": true },
+    { "viewport": "390x844", "modal": "Create menu", "rect": [16, 91, 358, 661], "centerDelta": [0, 0], "fullyVisible": true },
+    { "viewport": "390x844", "modal": "Hosting form", "rect": [16, 16, 358, 812], "centerDelta": [0, 0], "fullyVisible": true },
+    { "viewport": "390x844", "modal": "Quote form", "rect": [16, 16, 358, 812], "centerDelta": [0, 0], "fullyVisible": true },
+    { "viewport": "320x568", "modal": "Create menu", "rect": [16, 29, 288, 509], "centerDelta": [0, 0], "fullyVisible": true },
+    { "viewport": "320x568", "modal": "Client form", "rect": [16, 16, 288, 536], "centerDelta": [0, 0], "fullyVisible": true }
+  ],
+  "actions": ["Opened Create menu", "Selected Projects", "Selected Quotes", "Selected Hosting", "Selected Clients", "Cancelled forms without saving"],
+  "horizontalOverflowAt320px": false,
+  "scrollRestoredAfterClose": true,
+  "consoleErrors": [],
+  "supabaseRecordsCreated": 0
+}

@@ -24,8 +24,9 @@ export async function getSchema(req, res) {
 }
 
 /** GET /api/options — opciones reales para los selects de FK. */
-export async function getOptions(_req, res) {
-  return res.json({ options: await getAllOptions() });
+export async function getOptions(req, res) {
+  const keys = String(req.query.keys || '').split(',').filter(Boolean);
+  return res.json({ options: await getAllOptions(keys) });
 }
 
 /** GET /api/resources/:entity/schema */
@@ -57,7 +58,14 @@ export async function detail(req, res) {
   const def = entityOf(req);
   if (!def) return res.status(404).json({ error: 'Entidad no encontrada.' });
   if (def.view && !hasPermission(req.perms, def.view)) return deny(res, def.view);
-  return res.json(await crud.detail(req.params.entity, req.params.id));
+  return res.json(await crud.detail(req.params.entity, req.params.id, { includeRelations: req.query.includeRelated !== 'false' }));
+}
+
+export async function related(req, res) {
+  const def = entityOf(req);
+  if (!def) return res.status(404).json({ error: 'Entidad no encontrada.' });
+  if (def.view && !hasPermission(req.perms, def.view)) return deny(res, def.view);
+  return res.json({ items: await crud.related(req.params.entity, req.params.id, req.params.relation) });
 }
 
 /** GET /api/resources/:entity/:id */

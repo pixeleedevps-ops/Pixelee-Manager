@@ -1,0 +1,34 @@
+{
+  "capturedAt": "2026-11-26",
+  "browser": "Google Chrome installed, authorized profile",
+  "viewport": "1200x900",
+  "measurement": "Direct navigation, wait for screen heading and main loading spinner to clear, then 300ms settling time. Includes app/API/data load in this local environment.",
+  "screens": [
+    { "name": "Dashboard", "path": "/", "baselineLoadMs": 4276, "finalLoadMs": 3574, "changeMs": -702, "consoleErrors": 0 },
+    { "name": "Clientes", "path": "/clientes?section=overview", "baselineLoadMs": 1756, "finalLoadMs": 1351, "changeMs": -405, "consoleErrors": 0 },
+    { "name": "Contabilidad", "path": "/contabilidad?section=overview", "baselineLoadMs": 2163, "finalLoadMs": 1684, "changeMs": -479, "consoleErrors": 0 },
+    { "name": "Desarrollo", "path": "/desarrollo?section=overview", "baselineLoadMs": 904, "finalLoadMs": 503, "changeMs": -401, "consoleErrors": 0 },
+    { "name": "Marketing", "path": "/marketing?section=overview", "baselineLoadMs": 920, "finalLoadMs": 513, "changeMs": -407, "consoleErrors": 0 },
+    { "name": "Operaciones", "path": "/operaciones?section=overview", "baselineLoadMs": 985, "finalLoadMs": 519, "changeMs": -466, "consoleErrors": 0 },
+    { "name": "Gerencia", "path": "/gerencia?section=overview", "baselineLoadMs": 2187, "finalLoadMs": 1617, "changeMs": -570, "consoleErrors": 0 },
+    { "name": "Configuración", "path": "/configuracion?section=overview", "baselineLoadMs": 588, "finalLoadMs": 266, "changeMs": -322, "consoleErrors": 0 }
+  ],
+  "totalBaselineMs": 13779,
+  "totalFinalMs": 10027,
+  "totalChangePercent": -27.2,
+  "checks": {
+    "navigationAndPrimarySections": "pass",
+    "directUrlAndReload": "pass",
+    "searchAndFilters": "pass",
+    "createMenuPermissionFiltering": "pass for active gerencia profile; alternate roles not available in the current session",
+    "all34CreateFormsOpenedWithoutSubmitting": "pass",
+    "clientAndProjectRelationshipLinks": "pass",
+    "mobile390pxNoHorizontalOverflow": "pass",
+    "consoleErrors": 0,
+    "supabaseRecordsCreated": 0,
+    "lazyLoadingAndActiveResourceRendering": "preserved; only the selected ResourcePage is rendered",
+    "backendOrSchemaChanges": "none",
+    "screenshotsSavedAsFiles": "not available from the connected Chrome screenshot interface; screen captures were rendered inline during review"
+  },
+  "verificationRetries": 1
+}
